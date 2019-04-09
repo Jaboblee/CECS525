@@ -355,7 +355,12 @@ void TIME(void)
 			bcm2835_i2c_setSlaveAddress(0x68);
 			bcm2835_i2c_read(HRS,*buffer);
 			char ones = *buffer[0] & 0x0F;
-			char tens = (*buffer[0] >> 4);
+			if (*buffer[0] & 0b01000000) {
+				char tens = (*buffer[0] >> 4) & 0b1;
+				char ampm = (*buffer[0] >> 5) & 0b1;
+			} else {
+				char tens = (*buffer[0] >> 4) & 0b11;
+			}
 			uart_putc(tens+48);
 			uart_putc(ones+48);
 			bcm2835_i2c_read(MINS,*buffer);
