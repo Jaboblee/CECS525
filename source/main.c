@@ -30,9 +30,10 @@
 
 
 const char MS1[] = "\r\n\nCECS-525 RPI Tiny OS";
-const char MS2[] = "\r\nby Eugene Rockey Copyright 2013 All Rights Reserfped";
+const char MS2[] = "\r\nby Eugene Rockey Copyright 2013 All Rights Reserved";
 const char MS3[] = "\r\nReady: ";
 const char MS4[] = "\r\nInvalid Command Try Again...";
+const char MS5[] = "\r\n(A)DC,(C)ancom,(D)ate,(H)elp,a(L)arm,(R)eset,(S)FT,(T)ime,(V)FP11,(B)Print Long String,(G)Calculator";
 const char GPUDATAERROR[] = "\r\nSystem Error: Invalid GPU Data";
 const char LOGONNAME[] = "eugene    ";
 const char PASSWORD[] = "cecs525   ";
@@ -99,9 +100,8 @@ volatile unsigned int txbuff_e;
 
 //Date Variables
 uint8_t date_hold;							//for holding single digit
-uint8_t date_millenium;							//0-9 
-uint8_t date_century;							//0-9
-uint8_t date_year;  							//0-99
+uint8_t date_century;						//0-256 
+uint8_t date_year;  						//0-99
 uint8_t date_month;							//1-12
 uint8_t date_day;							//1-31
 
@@ -190,10 +190,11 @@ void DATE(void)
 			uart_puts("\r\nSet Date:");
 			uart_puts("\r\nType Year (Four Digits 0000-9999): ");
 			
-			date_millenium = (buff_readc()-48);		//input date_millenium
-			uart_putc(date_millenium+48);			
+			date_century = (buff_readc()-48);		//input date_millenium
+			uart_putc(date_century+48);
+			date_century = date_century*10;			
 			date_century = (buff_readc()-48);		//input date_century
-			uart_putc((date_century & 0x0F)+48);
+			//uart_putc((date_century & 0x0F)+48);
 			date_hold = (buff_readc()-48);			//holding the tens spot for date_year
 			uart_putc((date_hold & 0x0F)+48);
 			date_year = (buff_readc()-48);			//input ones spot for date_year
@@ -352,21 +353,21 @@ void TIME(void)
 			bcm2835_i2c_begin();
 			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
 			bcm2835_i2c_setSlaveAddress(0x68);
-			bcm2835_i2c_read(DOM,*buffer);
+			bcm2835_i2c_read(HRS,*buffer);
 			char ones = *buffer[0] & 0x0F;
 			char tens = (*buffer[0] >> 4);
 			uart_putc(tens+48);
 			uart_putc(ones+48);
-			bcm2835_i2c_read(MONTH,*buffer);
+			bcm2835_i2c_read(MINS,*buffer);
 			ones = *buffer[0] & 0x0F;
 			tens = (*buffer[0] >> 4);
-			uart_putc('/');
+			uart_putc(':');
 			uart_putc(tens+48);
 			uart_putc(ones+48);
-			bcm2835_i2c_read(YEAR,*buffer);
+			bcm2835_i2c_read(SECS,*buffer);
 			ones = *buffer[0] & 0x0F;
 			tens = (*buffer[0] >> 4);
-			uart_putc('/');
+			uart_putc(':');
 			uart_putc(tens+48);
 			uart_putc(ones+48);	
 			bcm2835_i2c_end();            
@@ -507,7 +508,7 @@ void RES(void)
 
 void HELP(void) //Command List
 {
-	uart_puts("\r\n(A)DC,(C)ancom,(D)ate,(H)elp,a(L)arm,(R)eset,(S)FT,(T)ime,(V)FP11,(B)Print Long String,(G)Calculator");
+	uart_puts(MS5);
 }
 
 void SFT(void) //Soft Floating Point Demo, optionally complete this command and related code for experience with floating point operations performed in software.
@@ -629,6 +630,7 @@ void VFP11(void) //ARM Vector Floating Point Unit Demo, see softfloat.c for some
 
 void command(void)
 {
+	uart_puts(MS5);
 	uart_puts(MS3);
 	uint8_t c = '\0';
 	while (c == '\0') {
@@ -702,7 +704,7 @@ void kernel_main()
 //	if (logon() == 0) while (1) {}
 	banner();
 //	HELP();
-	while (1) {command();}
+//	while (1) {command();}
 	
 	while (1) 
 	{
@@ -710,13 +712,7 @@ void kernel_main()
 		uart_putc('B');
 		uart_putc(' ');
 		testdelay();
-		
-		buff_readline(inpt,16);
-		
-		uart_puts("\n\t");
-		
-		uart_putString(inpt,16);
-				
+					
 		/*
 		if (rxbuff_e != rxbuff_b) {					//If buffer isn't empty
 			if (rxbuff_e < rxbuff_b) {				//If buffer has wrapped around (circular buffer)
