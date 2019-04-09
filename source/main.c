@@ -10,6 +10,7 @@
 #include "can.h"
 #include "softfloat.h"
 #include "math.h"
+#include "f2d.h"
 
 #define SECS 0x00
 #define MINS 0x01
@@ -29,7 +30,7 @@
 
 
 const char MS1[] = "\r\n\nCECS-525 RPI Tiny OS";
-const char MS2[] = "\r\nby Eugene Rockey Copyright 2013 All Rights Reserved";
+const char MS2[] = "\r\nby Eugene Rockey Copyright 2013 All Rights Reserfped";
 const char MS3[] = "\r\nReady: ";
 const char MS4[] = "\r\nInvalid Command Try Again...";
 const char GPUDATAERROR[] = "\r\nSystem Error: Invalid GPU Data";
@@ -43,6 +44,12 @@ extern int subtraction(int sub1, int sub2);
 extern int multiplication(int mul1, int mul2);
 extern int division(int div1, int div2);
 extern int remaind(int rem1, int rem2);
+
+extern float32 vfp11_add(float32 op1, float32 op2);
+extern float32 vfp11_sub(float32 op1, float32 op2);
+extern float32 vfp11_mul(float32 op1, float32 op2);
+extern float32 vfp11_div(float32 op1, float32 op2);
+extern float32 vfp11_sqrt(float32 operand1);
 
 //PWM Data for Alarm Tone
 uint32_t N[200] = {0,1,2,3,4,5,6,7,8,9,10,11,12,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,
@@ -76,9 +83,8 @@ void buff_readline(char *s, int n);					//Reads n characters from rx buffer into
 void tx_string(void);							//Tranmits long string from memory							
 void toString(int num, char* numArray);					//Converts signed int num into ascii characters in *numArray
 int log_10(int num);							//Returns the number of digits in an integer
-int stringToInt(char *string);						//Returns signed int as converted from ascii string
+int stringToint(char *string);						//Returns signed int as converted from ascii string
 int calc(void);								//Enters calculator submenu
-float stringToFloat(char *s, int n);
 
 //Serial buffers
 #define rxbuffsize 256
@@ -437,6 +443,98 @@ void VFP11(void) //ARM Vector Floating Point Unit Demo, see softfloat.c for some
     //Engineer the VFP11 math coprocessor application here.
     //Send a menu to hyperterminal as was done with the minimal computer
     //FADD, FSUB, FMUL, and FDIV, and any other functions you wish to implement in ARM assembly routines.
+    char operator[1];
+	const char calcmsg1[] = "\n\rSelect an Operator (+,-,*,/,(s)qrt,(v)olumeSphere,(e)xit): \0";
+	const char calcmsg2[] = "\n\rEnter first Operand: \0";
+	const char calcmsg3[] = "\n\rEnter second Operand: \0";
+	const char calcmsg4[] = "\n\rYour answer is: \0";
+	const char calcmsg5[] = " with a remainder of \0";
+	const char calcmsg6[] = "\n\rOperator error. Please try again.\0";
+	char opstring[30];
+	float32 operand1;
+	float32 operand2;
+	float32 output = 0;
+	char outputstring[30];
+	
+	while (1) {		
+		//printf("Select an Operator (+,-,*,/,(s)phere,(e)xit): ");
+		uart_puts(calcmsg1);
+	
+		//scanf("%c", operator[1]);
+		operator[0] = buff_readc();
+		//buff_readline(operator, 1);
+	
+		if (operator[0] != 'e') {
+			//printf("\nEnter first Operand: ");
+			uart_puts(calcmsg2);
+			//scanf("%d", operand1);
+			buff_readline(opstring, 30);
+			if (opstring[0] == 'p') {operand1=output;}
+			else {operand1 = ASCII_to_float32(opstring);}
+			
+			if (operator[0] != 'v' && operator[0] != 's') {
+				//printf("\nEnter second Operand: ");
+				uart_puts(calcmsg3);
+				//scanf("%d", operand2);
+				buff_readline(opstring, 30);
+				if (opstring[0] == 'p') {operand2 = output;}
+				else {operand2 = ASCII_to_float32(opstring);}
+			}
+		} else {
+			return;
+		}	
+		
+		output = 0;
+
+		switch(operator[0]) {
+			case '+':
+				output = vfp11_add(operand1, operand2);
+				break;
+			case '-':
+				output = vfp11_sub(operand1, operand2);
+				break;
+			case '*':
+				output = vfp11_mul(operand1, operand2);				
+				break;
+			case '/':
+				output = vfp11_div(operand1, operand2);
+				break;
+			case 's':
+				output = vfp11_sqrt(operand1);
+				break;
+			case 'v':
+				output = vfp11_mul(operand1, operand1);
+				output = vfp11_mul(operand1, output);
+				output = vfp11_mul(output, 0x40860a92);
+				break;
+			default:
+				//printf("\nOperator error. Please try again.");
+				uart_puts(calcmsg6);
+				break;
+		}
+	
+        //printf("Your answer is %d", output);
+		uart_puts(calcmsg4);
+//
+        float_d fd = f2d(output);
+        if (fd.s) {uart_putc('-');}
+		
+		if (fd.m == 0 && fd.e == 0) {uart_putc('0');}
+		else if (fd.e == 0x7FFFFFFF) {uart_puts("Infinity\0");}
+		else if (fd.e == 0x80000000) {uart_puts("NaN\0");}
+		else {
+			toString(fd.m,outputstring);
+			uart_putString(outputstring, 30);
+			uart_putc('E');
+			toString(fd.e,outputstring);
+			uart_putString(outputstring, 30);
+		}
+//
+		uart_puts(" => hex:\0");
+        toString_hex(output, outputstring);
+		uart_putString(outputstring, 30);
+
+	}
 }
 
 void command(void)
@@ -677,71 +775,6 @@ int stringToInt(char* string) {
 	}
 	
 	return num;
-}
-
-float stringToFloat(char* s, int n) {
-	uint32_t ipart = 0;				//Integer part
-	uint32_t fpart = 0;				//Fractional part
-	uint32_t fdigits = 0;
-	uint32_t b_exp = 150;
-	
-	uint32_t result = 0;
-	
-	int neg = 0;
-	int i = 0;
-	
-	if (s[0] == 45) {
-		neg = 1;
-		i = 1;
-	}
-	
-	while ((i < n) && (s[i] >= 48 && s[i] <= 57)) {
-		
-		ipart *= 10;
-		ipart += (s[i] - '0');
-		i++;
-	}
-	
-	result = ipart;
-	
-	if (s[i] == '.') {
-		i++;
-		fdigits = i;
-		
-		while ((i < n) && (s[i] >= 48 && s[i] <= 57)) {
-			
-			fpart *= 10;
-			fpart += (s[i] - '0');
-			i++;
-		}
-		
-		fdigits = i - fdigits;
-	}
-	
-	if (ipart == 0 && fpart == 0) {return 0;}
-	
-	
-	while (result & 0xFF000000) {
-		result = (result >> 1);
-		b_exp++;
-	}
-	
-	while !(result & 0x800000) {
-		result = (result << 1);
-		if (fdigits != 0) {
-			fpart = (fpart << 1);
-			if (fpart % (10 * fdigits)) {
-				result++;
-				fpart = fpart - (fpart % (10 * fdigits));
-			}
-		}
-		b_exp--;
-	}
-	
-	result = ((result & 0x807FFFFF) | (b_exp << 23));
-	if (neg != 0) {result = (result | 0x80000000);}
-	
-	return (float) result;
 }
 
 int calc() {

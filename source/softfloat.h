@@ -123,7 +123,7 @@ char float32_lt_quiet( float32, float32 );
 flag float32_is_signaling_nan( float32 );
 
 //Eugene's Operations
-unsigned int ASCII_to_float32(char*);
+float32 ASCII_to_float32(char*);
 char* float32_to_ASCII(float32);
 
 /*----------------------------------------------------------------------------

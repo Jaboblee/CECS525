@@ -565,7 +565,7 @@ unsigned int getfraction(unsigned int shifts, unsigned int fleadzeros, unsigned 
 	return out;
 }
 
-unsigned int ASCII_to_float32(char* in) //Copyright 2014 Eugene Rockey
+float32 ASCII_to_float32(char* in) //Copyright 2014 Eugene Rockey
 {									//converts ASCII decimal numbers to IEEE-754 32-bit unsigned int
 	unsigned int out = 0, index = 0, integer = 0, fraction = 0, biasedexp = 0, shifts = 0, fleadzeros = 0, ibits = 0;
 	
@@ -575,7 +575,7 @@ unsigned int ASCII_to_float32(char* in) //Copyright 2014 Eugene Rockey
 		index++;
 	}
 	
-	while (in[index] != '.') 
+	while (in[index] != '.' && in[index] != 0) 
 	{
 		integer = (integer + (in[index] - 48)) * 10;
 		index ++;

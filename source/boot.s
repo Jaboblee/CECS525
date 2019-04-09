@@ -134,7 +134,34 @@ vfp11_add:
 		FADDS	s2, s2, s1	
 		FMRS	r0, s2
 		MOV	pc, lr
+		
+.global vfp11_sub
+vfp11_sub:
+		FMSRR	{s1, s2}, r0, r1
+		FSUBS	s2, s1, s2	
+		FMRS	r0, s2
+		MOV	pc, lr
 
+.global vfp11_mul
+vfp11_mul:
+		FMSRR	{s1, s2}, r0, r1
+		FMULS	s2, s2, s1	
+		FMRS	r0, s2
+		MOV	pc, lr
+
+.global vfp11_div
+vfp11_div:
+		FMSRR	{s1, s2}, r0, r1
+		FDIVS	s2, s1, s2	
+		FMRS	r0, s2
+		MOV	pc, lr
+		
+.global vfp11_sqrt
+vfp11_sqrt:
+		FMSR	s1, r0
+		FSQRTS	s2, s1	
+		FMRS	r0, s2
+		MOV	pc, lr
 
 		
 .global addition
