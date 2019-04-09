@@ -96,6 +96,24 @@ volatile unsigned int rxbuff_e;
 char txbuff[txbuffsize];
 volatile unsigned int txbuff_b;
 volatile unsigned int txbuff_e;
+
+//Date Variables
+uint8_t date_hold;							//for holding single digit
+uint8_t date_millenium;							//0-9 
+uint8_t date_century;							//0-9
+uint8_t date_year;  							//0-99
+uint8_t date_month;							//1-12
+uint8_t date_day;							//1-31
+
+//Time Variables
+uint8_t time_ampm;							//0-1
+uint8_t time_hour;							//0-12
+uint8_t time_minute;							//0-59
+uint8_t time_second;							//0-59
+	
+//Temperature Variable
+unsigned short temperature;						//See DS321M datasheet
+
 /***************************************************************************/
 
 extern int invar;               //assembly variables
@@ -165,15 +183,75 @@ void DATE(void)
 		c = buff_readc();
 	}
 	switch (c) {
-		case 'S' | 's':
-            
-            
+		case 'S' | 's':						//needs to be edited to fit DATE, this was copied from time
+			bcm2835_i2c_begin();
+			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+			bcm2835_i2c_setSlaveAddress(0x68);
+			uart_puts("\r\nSet Date:");
+			uart_puts("\r\nType Year (Four Digits 0000-9999): ");
 			
-           								 //Engineer the code here to Set the current Date in the DS3231M
-            
-            
-            
-            break;
+			date_millenium = (buff_readc()-48);		//input date_millenium
+			uart_putc(date_millenium+48);			
+			date_century = (buff_readc()-48);		//input date_century
+			uart_putc((date_century & 0x0F)+48);
+			date_hold = (buff_readc()-48);			//holding the tens spot for date_year
+			uart_putc((date_hold & 0x0F)+48);
+			date_year = (buff_readc()-48);			//input ones spot for date_year
+			uart_putc((date_year & 0x0F)+48);
+			date_year = date_year + (date_hold*10); 	//combining date_hold and date_year to make date_year 0-99
+			
+/*			This section needs to be rewritten, basically needs to store millenium and century locally properly and
+			store the year tens spot and ones spot onto the RTC.
+			
+			
+			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 23) 
+			{
+				*buffer[0] = 0x00;
+				uart_puts("\r\nInvalid Hours Value!");
+				break;
+			}
+			else
+			{
+				*buffer[0] = tens & ones;
+			}			
+			bcm2835_i2c_write(HRS,*buffer);
+			uart_puts("\r\nType Minutes (two digits 00-59): ");
+			date_millenium = (buff_readc()-48);
+			uart_putc(date_millenium+48);
+			date_century = (buff_readc()-48) | 0xF0;
+			uart_putc((ones & 0x0F)+48);
+			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 59) 
+			{
+				*buffer[0] = 0x00;
+				uart_puts("\r\nInvalid Minutes Value!");
+				break;
+			}
+			else
+			{
+				*buffer[0] = tens & ones;
+			}			
+			bcm2835_i2c_write(MINS,*buffer);			
+			uart_puts("\r\nType Seconds (two digits 00-59): ");
+			tens = ((buff_readc()-48) << 4) | 0x0F;
+			uart_putc((tens >> 4)+48);
+			ones = (buff_readc()-48) | 0xF0;
+			uart_putc((ones & 0x0F)+48);
+			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 59) 
+			{
+				*buffer[0] = 0x00;
+				uart_puts("\r\nInvalid Seconds Value!");
+				break;
+			}
+			else
+			{
+				*buffer[0] = tens & ones;
+			}			
+			bcm2835_i2c_write(SECS,*buffer);			
+			uart_puts("\r\nTime is now set.");
+			bcm2835_i2c_end();
+			break;
+*/
+			
 		case 'D' | 'd':
 			bcm2835_i2c_begin();
 			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
@@ -269,17 +347,29 @@ void TIME(void)
 			uart_puts("\r\nTime is now set.");
 			bcm2835_i2c_end();
 			break;
-		case 'D' | 'd':
-            
-            
-            
-            
-			//Engineer the code here to Display the current Time stored in the DS3231M to HyperTerminal
-            
-            
-            
-            
-            
+			
+		case 'D' | 'd':				//needs to be edited to display TIME, this currently displays DATE
+			bcm2835_i2c_begin();
+			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+			bcm2835_i2c_setSlaveAddress(0x68);
+			bcm2835_i2c_read(DOM,*buffer);
+			char ones = *buffer[0] & 0x0F;
+			char tens = (*buffer[0] >> 4);
+			uart_putc(tens+48);
+			uart_putc(ones+48);
+			bcm2835_i2c_read(MONTH,*buffer);
+			ones = *buffer[0] & 0x0F;
+			tens = (*buffer[0] >> 4);
+			uart_putc('/');
+			uart_putc(tens+48);
+			uart_putc(ones+48);
+			bcm2835_i2c_read(YEAR,*buffer);
+			ones = *buffer[0] & 0x0F;
+			tens = (*buffer[0] >> 4);
+			uart_putc('/');
+			uart_putc(tens+48);
+			uart_putc(ones+48);	
+			bcm2835_i2c_end();            
 			break;	
 		default:
 			uart_puts(MS4);
