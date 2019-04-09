@@ -91,11 +91,14 @@ void uart_init()
     mmio_write(UART0_IBRD, 1);
     mmio_write(UART0_FBRD, 40);
  
-    // Disable FIFO. Make 8 bit data transmission (1 stop bit, no parity).
-    mmio_write(UART0_LCRH,(1 << 5) | (1 << 6));
+    // Disable FIFO. Make 8 bit data transmission (1 stop bit, no parity). Set bit 4 to 1 to enable FIFO
+    mmio_write(UART0_LCRH, (1 << 5) | (1 << 6));
  
-    // Engineer the Interrupt for UART0 Receive
-   mmio_write(UART0_IMSC, 0x0010);
+    // Set FIFO interrupt levels, Page 187
+    //mmio_write(UART0_IFLS, (0<<0) | (0<<1) | (0<<2) | (0<<3) | (0<<4) | (0<<5));
+ 
+    // Engineer the Interrupt for UART0 Receive				//Enable interrupt for UART0 TX
+    mmio_write(UART0_IMSC, (1 << 4));
  
     // Enable UART0, receive & transfer part of UART.
     mmio_write(UART0_CR, (1 << 0) | (1 << 8) | (1 << 9));
@@ -108,17 +111,23 @@ void uart_init()
 void uart_putc(uint8_t byte) 
 {
     // test for UART to become ready to transmit
-    while (1) 
-	{
-      //  if (!(mmio_read(UART0_FR) & (1 << 5)))
-      //  {
-            if (!(mmio_read(UART0_FR) & (1 << 3)))
-            {
-                break;
-            }
+    while (1) {
+        if (!(mmio_read(UART0_FR) & (1 << 5))) {			//Wait until hardware TX buffer isn't full to continue
+	//		if (!(mmio_read(UART0_FR) & (1 << 3))) {
+				break;
+			}
 	//	}
     }
+	
+    int interrupt = 0; 
+    if ((mmio_read(UART0_IMSC) & (1<<5)) == (1<<5)) {			//Check if tx interrupt is on in interrupt mask 
+		interrupt = 1;
+		uart_tx_off(); 						//Turn off tx interrupt while writing to buffer
+	}
     mmio_write(UART0_DR, byte);
+    if (interrupt == 1) { 
+		uart_tx_on();						//Reenable tx interrupt if disabled
+	}
 }
 
 uint8_t uart_readc(void)
@@ -130,7 +139,7 @@ uint8_t uart_readc(void)
 		{
 			break;
 		}
-    	}
+    }
 	return mmio_read(UART0_DR);
 }
  
@@ -143,5 +152,78 @@ void uart_puts(const char *str)
     while (*str) 
 	{
         uart_putc(*str++);
-    	}
+    }
+}
+
+/*
+ * print a string to the UART one character at a time
+ * char *str: 0-terminated string, of potential length n
+ */
+void uart_putString(char *s, int n) {
+	for (int i=0;i<n;i++) {
+		if (s[i]=='\0') {break;}
+		uart_putc(s[i]);
+	}
+}
+
+uint8_t uart_itrpt_status(void) {
+	
+	if (mmio_read(UART0_MIS) & ((1<<5) | (1<<4)) == 0)
+	{
+		return 0; 							//NO status bits set
+	}
+	else if (mmio_read(UART0_MIS) & ((1<<5) | (1<<4)) == (1<<4))
+	{
+		return 1;							//Rx is set, Tx is not
+	}
+	else if (mmio_read(UART0_MIS) & ((1<<5) | (1<<4)) == (1<<5))
+	{
+		return 2;							//Tx is set, Rx is not
+	}
+	else if (mmio_read(UART0_MIS) & ((1<<5) | (1<<4)) == ((1<<5) | (1<<4)))
+	{
+		return 3;							//Both Tx and Rx are set
+	}
+
+	return 4;								//Something went wrong.
+
+}
+
+/*
+ * Enable tx and rx interrupt by writing to interrupt mask, disabling all other uart interrupts
+ */
+void uart_tx_on(void) {
+	mmio_write(UART0_IMSC, (1<<4) | (1<<5));	
+}
+
+/*
+ * Enable rx interrupt by writing to interrupt mask, disabling all other uart interrupts
+ */
+void uart_tx_off(void) {
+	mmio_write(UART0_IMSC, (1<<4));
+}
+
+/*
+ * Checks uart buffers, returns 1 if full, 0 if empty, and 3 if neither
+ * accepts 'r' for rx buffer and 't' for tx buffer
+*/
+uint8_t uart_buffchk(char c) {
+	if (c == 'r') {
+		if (mmio_read(UART0_FR) & (1<<4)) {
+			return 0;
+		} else if (mmio_read(UART0_FR) & (1<<6)) {
+			return 1;
+		} else {
+			return 3;
+		}
+	} else if (c == 't') {
+		if (mmio_read(UART0_FR) & (1<<7)) {
+			return 0;
+		} else if (mmio_read(UART0_FR) & (1<<5)) {
+			return 1;
+		} else {
+			return 3;
+		}
+	}
+	return 0;
 }
