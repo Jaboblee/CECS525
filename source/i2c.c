@@ -8,14 +8,20 @@
 #include "bcm2835.h"
 
 //***IMPORTANT - comment out if model b version 2 is used: Ver1: bcm2835_bsc0, Ver2: bcm2835_bsc1 
-#define model1
+#define MODEL1
+
+#ifdef MODEL1
+	#define bcm2835_bsc bcm2835_bsc0
+#else
+	#define bcm2835_bsc bcm2835_bsc1
+#endif
 
 // The delay time in uS needed to transmit one byte for 100KHZ SCL (see formula).
 static int i2c_byte_wait_us = 90;
 
 void bcm2835_i2c_begin(void)
 {	
-#ifdef model1 //RPI Model B Version 1
+#ifdef MODEL1 //RPI Model B Version 1
 	// Set the I2C/BSC0 pins to the Alt 0 function to enable I2C access on them
 	bcm2835_gpio_fsel(RPI_GPIO_P1_03, BCM2835_GPIO_FSEL_ALT0); // SDA
     bcm2835_gpio_fsel(RPI_GPIO_P1_05, BCM2835_GPIO_FSEL_ALT0); // SCL
@@ -29,7 +35,7 @@ void bcm2835_i2c_begin(void)
 
 void bcm2835_i2c_end(void)
 {
-#ifdef model1 //RPI Model B Version 1
+#ifdef MODEL1 //RPI Model B Version 1
     // Set all the I2C/BSC0 pins back to input
     bcm2835_gpio_fsel(RPI_GPIO_P1_03, BCM2835_GPIO_FSEL_INPT); // SDA
     bcm2835_gpio_fsel(RPI_GPIO_P1_05, BCM2835_GPIO_FSEL_INPT); // SCL
@@ -44,24 +50,24 @@ void bcm2835_i2c_end(void)
 void bcm2835_i2c_setSlaveAddress(uint8_t addr)
 {
 	// Set I2C Device Address
-	volatile uint32_t* paddr = bcm2835_bsc0 + BCM2835_BSC_A/4;
+	volatile uint32_t* paddr = bcm2835_bsc + BCM2835_BSC_A/4;
 	bcm2835_peri_write(paddr, addr);
 }
 
 void bcm2835_i2c_setClockDivider(uint16_t divider)
 {
 	//Set SCL frequency
-    volatile uint32_t* paddr = bcm2835_bsc0 + BCM2835_BSC_DIV/4;
+    volatile uint32_t* paddr = bcm2835_bsc + BCM2835_BSC_DIV/4;
     bcm2835_peri_write(paddr, divider);
 }
 
 // Write a byte of data to I2C slave
 void bcm2835_i2c_write(uint8_t sradd, char* buff)
 {
-    volatile uint32_t* dlen    = bcm2835_bsc0 + BCM2835_BSC_DLEN/4;
-    volatile uint32_t* fifo    = bcm2835_bsc0 + BCM2835_BSC_FIFO/4;
-    volatile uint32_t* status  = bcm2835_bsc0 + BCM2835_BSC_S/4;
-    volatile uint32_t* control = bcm2835_bsc0 + BCM2835_BSC_C/4;
+    volatile uint32_t* dlen    = bcm2835_bsc + BCM2835_BSC_DLEN/4;
+    volatile uint32_t* fifo    = bcm2835_bsc + BCM2835_BSC_FIFO/4;
+    volatile uint32_t* status  = bcm2835_bsc + BCM2835_BSC_S/4;
+    volatile uint32_t* control = bcm2835_bsc + BCM2835_BSC_C/4;
     // Clear FIFO
     bcm2835_peri_set_bits(control, BCM2835_BSC_C_CLEAR_1 , BCM2835_BSC_C_CLEAR_1 );
     // Clear Status
@@ -80,10 +86,10 @@ void bcm2835_i2c_write(uint8_t sradd, char* buff)
 // the required register. Only works if your device supports this mode
 void bcm2835_i2c_read(uint8_t sradd, char* buff)
 {   
-    volatile uint32_t* dlen    = bcm2835_bsc0 + BCM2835_BSC_DLEN/4;
-    volatile uint32_t* fifo    = bcm2835_bsc0 + BCM2835_BSC_FIFO/4;
-    volatile uint32_t* status  = bcm2835_bsc0 + BCM2835_BSC_S/4;
-    volatile uint32_t* control = bcm2835_bsc0 + BCM2835_BSC_C/4;
+    volatile uint32_t* dlen    = bcm2835_bsc + BCM2835_BSC_DLEN/4;
+    volatile uint32_t* fifo    = bcm2835_bsc + BCM2835_BSC_FIFO/4;
+    volatile uint32_t* status  = bcm2835_bsc + BCM2835_BSC_S/4;
+    volatile uint32_t* control = bcm2835_bsc + BCM2835_BSC_C/4;
     
     // Clear FIFO
     bcm2835_peri_set_bits(control, BCM2835_BSC_C_CLEAR_1 , BCM2835_BSC_C_CLEAR_1 );
