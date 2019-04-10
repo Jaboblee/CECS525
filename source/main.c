@@ -354,11 +354,14 @@ void TIME(void)
 	bcm2835_gpio_fen(RPI_GPIO_P1_23);
 	enable_irq(49);
 	enable_irq(50);
+	enable_irq(51);
+	enable_irq(52);
 	
 	bcm2835_i2c_begin();
 	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
 	bcm2835_i2c_setSlaveAddress(0x68);
 	*buffer[0] = 0b11111011;
+	bcm2835_i2c_write(0xD,*buffer);
 	bcm2835_i2c_write(0xE,*buffer);
 	bcm2835_i2c_end();
 	
@@ -799,7 +802,7 @@ void kernel_main()
 	char inpt[16];
 	
 	uart_init();
-	enable_irq_57();
+	enable_irq(57);	//enable_irq_57();
 	enable_arm_irq();
 //	if (logon() == 0) while (1) {}
 	banner();
@@ -833,7 +836,7 @@ void kernel_main()
 
 void irq_handler(void)
 {
-	/*
+	
 	if (bcm2835_gpio_eds(RPI_GPIO_P1_23)) {		//Reset Clock
 		uart_putc('R');
 		bcm2835_gpio_set_eds(RPI_GPIO_P1_23);
@@ -842,7 +845,7 @@ void irq_handler(void)
 		uart_putc('T');
 		bcm2835_gpio_set_eds(RPI_GPIO_P1_24);
 	}
-	*/
+	uart_putc('B');
 	if (txbuff_b != txbuff_e) { 
 		if (uart_buffchk('t') == 0) {
 			for (int i=0;i<8;i++) {
