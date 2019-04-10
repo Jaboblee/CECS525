@@ -7,36 +7,38 @@
 #include "uart.h"
 #include "bcm2835.h"
 
-
-//***IMPORTANT - change bcm2835_bsc0 to bcm2835_bsc1 or vice-versa depending on version of model B PI used.
+//***IMPORTANT - comment out if model b version 2 is used: Ver1: bcm2835_bsc0, Ver2: bcm2835_bsc1 
+#define model1
 
 // The delay time in uS needed to transmit one byte for 100KHZ SCL (see formula).
 static int i2c_byte_wait_us = 90;
 
 void bcm2835_i2c_begin(void)
 {	
-    // Uncomment for RPI Model B Version 1
-    // Set the I2C/BSC0 pins to the Alt 0 function to enable I2C access on them
+#ifdef model1 //RPI Model B Version 1
+	// Set the I2C/BSC0 pins to the Alt 0 function to enable I2C access on them
 	bcm2835_gpio_fsel(RPI_GPIO_P1_03, BCM2835_GPIO_FSEL_ALT0); // SDA
     bcm2835_gpio_fsel(RPI_GPIO_P1_05, BCM2835_GPIO_FSEL_ALT0); // SCL
     
-    // Uncomment for RPI Model B Version 2
+#else //RPI Model B Version 2
     // Set the I2C/BSC1 pins to the Alt 0 function to enable I2C access on them
-   // bcm2835_gpio_fsel(RPI_V2_GPIO_P1_03, BCM2835_GPIO_FSEL_ALT0); // SDA
-   // bcm2835_gpio_fsel(RPI_V2_GPIO_P1_05, BCM2835_GPIO_FSEL_ALT0); // SCL}
+	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_03, BCM2835_GPIO_FSEL_ALT0); // SDA
+	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_05, BCM2835_GPIO_FSEL_ALT0); // SCL}
+#endif
 }
 
 void bcm2835_i2c_end(void)
 {
-    // Uncomment for RPI Model B Version 1
+#ifdef model1 //RPI Model B Version 1
     // Set all the I2C/BSC0 pins back to input
     bcm2835_gpio_fsel(RPI_GPIO_P1_03, BCM2835_GPIO_FSEL_INPT); // SDA
     bcm2835_gpio_fsel(RPI_GPIO_P1_05, BCM2835_GPIO_FSEL_INPT); // SCL
     
-    // Uncomment for RPI Model B Version 2
+#else //RPI Model B Version 2
     // Set all the I2C/BSC1 pins back to input
-   // bcm2835_gpio_fsel(RPI_V2_GPIO_P1_03, BCM2835_GPIO_FSEL_INPT); // SDA
-   // bcm2835_gpio_fsel(RPI_V2_GPIO_P1_05, BCM2835_GPIO_FSEL_INPT); // SCL}
+	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_03, BCM2835_GPIO_FSEL_INPT); // SDA
+	bcm2835_gpio_fsel(RPI_V2_GPIO_P1_05, BCM2835_GPIO_FSEL_INPT); // SCL}
+#endif
 }
 
 void bcm2835_i2c_setSlaveAddress(uint8_t addr)

@@ -151,6 +151,54 @@ void bcm2835_gpio_write(uint8_t pin, uint8_t on)
 		bcm2835_gpio_clr(pin);
 }
 
+// See if an event detection bit is set
+uint8_t bcm2835_gpio_eds(uint8_t pin)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPEDS0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    uint32_t value = bcm2835_peri_read(paddr);
+    return (value & (1 << shift)) ? HIGH : LOW;
+}
+
+void bcm2835_gpio_set_eds(uint8_t pin)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPEDS0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    uint32_t value = 1 << shift;
+    bcm2835_peri_write(paddr, value);
+}
+// Rising edge detect enable
+void bcm2835_gpio_ren(uint8_t pin)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPREN0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    uint32_t value = 1 << shift;
+    bcm2835_peri_set_bits(paddr, value, value);
+}
+void bcm2835_gpio_clr_ren(uint8_t pin)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPREN0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    uint32_t value = 1 << shift;
+    bcm2835_peri_set_bits(paddr, 0, value);
+}
+
+// Falling edge detect enable
+void bcm2835_gpio_fen(uint8_t pin)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPFEN0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    uint32_t value = 1 << shift;
+    bcm2835_peri_set_bits(paddr, value, value);
+}
+void bcm2835_gpio_clr_fen(uint8_t pin)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPFEN0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    uint32_t value = 1 << shift;
+    bcm2835_peri_set_bits(paddr, 0, value);
+}
+
 void bcm2835_spi_chipSelect(uint8_t cs)
 {
     volatile uint32_t* paddr = bcm2835_spi0 + BCM2835_SPI0_CS/4;
