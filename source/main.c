@@ -384,10 +384,12 @@ void TIME(void)
 	uart_puts("\x1B" "[2J" "\x1B" "[2;1H");	//Clear Screen, Go to row 2, col 1
 	
 	//Activate Interrupts
-	bcm2835_gpio_fsel(RPI_GPIO_P1_24, BCM2835_GPIO_FSEL_INPT);
 	bcm2835_gpio_fsel(RPI_GPIO_P1_23, BCM2835_GPIO_FSEL_INPT);
-	bcm2835_gpio_ren(RPI_GPIO_P1_24);
+	bcm2835_gpio_fsel(RPI_GPIO_P1_24, BCM2835_GPIO_FSEL_INPT);
+	bcm2835_gpio_set_pud(RPI_GPIO_P1_23, BCM2835_GPIO_PUD_UP);
+	bcm2835_gpio_set_pud(RPI_GPIO_P1_24, BCM2835_GPIO_PUD_DOWN);
 	bcm2835_gpio_fen(RPI_GPIO_P1_23);
+	bcm2835_gpio_ren(RPI_GPIO_P1_24);
 	enable_irq(49);
 	enable_irq(50);
 	enable_irq(51);
@@ -397,8 +399,7 @@ void TIME(void)
 	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
 	bcm2835_i2c_setSlaveAddress(0x68);
 	*buffer[0] = 0b11111011;
-	bcm2835_i2c_write(0xD,*buffer);
-	bcm2835_i2c_write(0xE,*buffer);
+	bcm2835_i2c_write(CR,*buffer);		//CR=0xD not sure, Datasheet says 0xE //bcm2835_i2c_write(0xE,*buffer);
 	bcm2835_i2c_end();
 	
 	//TEST
@@ -503,7 +504,10 @@ void TIME(void)
 			bcm2835_i2c_end();
 			break;
 			
-		case 'D' | 'd':	
+		case 'D' | 'd':
+			
+			uart_puts("\x1B" "[s" "\x1B" "[H" "\x1B" "[2K");	//Save Cursor, Go Home, Erase Line
+		
 			bcm2835_i2c_begin();
 			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
 			bcm2835_i2c_setSlaveAddress(0x68);
@@ -537,7 +541,10 @@ void TIME(void)
 				} else {
 					uart_puts("PM");	
 				}
-			}         
+			}
+			
+			uart_puts("\x1B" "[u");	//Return Cursor to saved location
+			
 			break;	
 		default:
 			uart_puts(MS4);
