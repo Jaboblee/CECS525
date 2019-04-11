@@ -19,6 +19,8 @@
 #define MONTH 0x05
 #define YEAR 0x06
 #define ASECS 0x07
+#define TEMPMSB 0x11
+#define TEMPLSB 0x12
 #define CR 0x0D
 #define GPUREAD	0x2000B880
 #define GPUPOLL	0x2000B890
@@ -112,8 +114,10 @@ uint8_t time_hour;							//0-12
 uint8_t time_minute;							//0-59
 uint8_t time_second;							//0-59
 	
-//Temperature Variable
-unsigned short temperature;						//See DS321M datasheet
+//Temperature Variables
+uint8_t temp_units						//0 for Celsius, 1 for Fahrenheit
+char temp_string[8];						//whole number string
+char temp_decimal[3];						//decimal string
 
 /***************************************************************************/
 
@@ -324,6 +328,49 @@ void DATE(void)
 			break;
 	}
 }
+
+void temp_update() {
+	
+	int temp_int;					//For use within tostring, which takes an int as an input
+	uint8_t temp_frac;				//Used for fractional input
+	
+	bcm2835_i2c_begin();
+	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+	bcm2835_i2c_setSlaveAddress(0x68);
+	bcm2835_i2c_read(TEMPMSB, *buffer);
+	temp_int = *buffer[0];
+	
+	if (temp_int & 0x80) {				//converts a signed 8-bit integer into a signed 32-bit integer
+		temp_int = (temp_int | 0x80000000);
+		temp_int = (temp_int & 0xFFFFFF7F);
+	}
+	
+	toString(temp_int, temp_string);
+	bcm2835_i2c_read(TEMPMSB, *buffer);
+	temp_frac = ((*buffer[0] & 0xC0) >> 6);		//00 for 0, 01 for .25, 10 for .5, 11 for .75
+	
+	if (temp_frac != 0) {
+		if (temp_frac == 1) {
+			temp_decimal[0] = '.';
+			temp_decimal[1] = '2';
+			temp_decimal[2] = '5';
+		}
+		else if (temp_frac == 2) {
+			temp_decimal[0] = '.';
+			temp_decimal[1] = '5';
+			temp_decimal[2] = '\0';
+		}
+		else if (temp_frac == 3) {
+			temp_decimal[0] = '.';
+			temp_decimal[1] = '7';
+			temp_decimal[2] = '5';
+		}	
+	}
+	else {
+		temp_decimal[0] = '\0';
+	}
+}
+	
 
 int gettime_s(char *s) {
 	char ones,tens;
@@ -552,6 +599,8 @@ void TIME(void)
 			break;	
 	}
 }
+
+
 
 void ALARM(void)
 {
