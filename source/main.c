@@ -86,6 +86,7 @@ void toString(int num, char* numArray);					//Converts signed int num into ascii
 int log_10(int num);							//Returns the number of digits in an integer
 int stringToint(char *string);						//Returns signed int as converted from ascii string
 int calc(void);								//Enters calculator submenu
+void gettime_s(char *s);
 
 //Serial buffers
 #define rxbuffsize 256
@@ -136,27 +137,11 @@ void testdelay(void)
 
 void enable_irq_57(void) 
 {
-	mmio_write(0x2000B214, 0x02000000);				//BCM2835-Page 175
-}
-void enable_irq_49(void) 
-{
-	mmio_write(0x2000B214, 0x20000);				//BCM2835-Page 112
-}
-void enable_irq_50(void) 
-{
-	mmio_write(0x2000B214, 0x40000);				
+	mmio_write(0x2000B214, 0x02000000);				//BCM2835-Page 175, 112
 }
 void disable_irq_57(void)
 {
 	mmio_write(0x2000B220, 0x02000000);
-}
-void disable_irq_49(void)
-{
-	mmio_write(0x2000B220, 0x20000);
-}
-void disable_irq_50(void)
-{
-	mmio_write(0x2000B220, 0x40000);
 }
 void enable_irq(uint8_t x) {
 	uint32_t write = 1;
@@ -340,16 +325,67 @@ void DATE(void)
 	}
 }
 
+int gettime_s(char *s) {
+	char ones,tens;
+	int8_t ampm = -1;
+	int i = 0;
+	
+	bcm2835_i2c_begin();
+	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+	bcm2835_i2c_setSlaveAddress(0x68);
+	bcm2835_i2c_read(HRS,*buffer);
+	ones = *buffer[0] & 0x0F;
+	if (*buffer[0] & 0b01000000) {
+		tens = (*buffer[0] >> 4) & 0b1;
+		ampm = (*buffer[0] >> 5) & 0b1;
+	} else {
+		tens = (*buffer[0] >> 4) & 0b11;
+	}
+	s[i++] = tens + 48;	//uart_putc(tens+48);
+	s[i++] = ones + 48;	//uart_putc(ones+48);
+	
+	bcm2835_i2c_read(MINS,*buffer);
+	ones = *buffer[0] & 0x0F;
+	tens = (*buffer[0] >> 4);
+	s[i++] = ':';	//uart_putc(':');
+	s[i++] = tens + 48;	//uart_putc(tens+48);
+	s[i++] = ones + 48;	//uart_putc(ones+48);
+	
+	bcm2835_i2c_read(SECS,*buffer);
+	bcm2835_i2c_end(); 
+	ones = *buffer[0] & 0x0F;
+	tens = (*buffer[0] >> 4);
+	s[i++] = ':';	//uart_putc(':');
+	s[i++] = tens + 48;	//uart_putc(tens+48);
+	s[i++] = ones + 48;	//uart_putc(ones+48);	  
+	
+	if (ampm != -1) {
+		s[i++] = ' ';	//uart_putc(' ');
+		if (ampm == 0) {
+			s[i++] = 'A';	//uart_puts("AM");
+		} else {
+			s[i++] = 'P';	//uart_puts("PM");	
+		}
+		s[i++] = 'M';
+	}
+	
+	return i;
+}
+
 void TIME(void)
 {
 	char ones = -1;
 	char tens = -1;
-	char ampm = -1;
+	int8_t ampm = -1;
 	char c2 = '\0';
-	//uart_puts("\u001b[s\u001b[H\u001b[2K");
-	//uart_puts("\u001b[u");
+	
+	//uart_puts("\x1B" "[s" "\x1B" "[H" "\x1B" "[2K");	//Save Cursor, Go Home, Erase Line
+	//uart_puts("\x1B" "[u");	//Return Cursor to saved location
+	uart_puts("\x1B" "[2J" "\x1B" "[2;1H");	//Clear Screen, Go to row 2, col 1
 	
 	//Activate Interrupts
+	bcm2835_gpio_fsel(RPI_GPIO_P1_24, BCM2835_GPIO_FSEL_INPT);
+	bcm2835_gpio_fsel(RPI_GPIO_P1_23, BCM2835_GPIO_FSEL_INPT)
 	bcm2835_gpio_ren(RPI_GPIO_P1_24);
 	bcm2835_gpio_fen(RPI_GPIO_P1_23);
 	enable_irq(49);
@@ -364,6 +400,24 @@ void TIME(void)
 	bcm2835_i2c_write(0xD,*buffer);
 	bcm2835_i2c_write(0xE,*buffer);
 	bcm2835_i2c_end();
+	
+	//TEST
+	while (rxbuff_b == rxbuff_e) {							//Wait until buffer is nonempty
+		uart_putc('\n');
+		uart_putc(bcm2835_gpio_lev(RPI_GPIO_P1_23) + 48)
+		uart_putc('\t');
+		uart_putc(bcm2835_gpio_lev(RPI_GPIO_P1_24) + 48);
+		
+		if (bcm2835_gpio_eds(RPI_GPIO_P1_23)) {		//Reset Clock
+			uart_putc('R');
+			bcm2835_gpio_set_eds(RPI_GPIO_P1_23);
+		}
+		if (bcm2835_gpio_eds(RPI_GPIO_P1_24)) {		//Time Update
+			uart_putc('T');
+			bcm2835_gpio_set_eds(RPI_GPIO_P1_24);
+		}
+	}
+	//TESTEND
 	
 	uart_puts("\r\nType TIME (S)et or (D)isplay: ");
 	uint8_t c = '\0';
