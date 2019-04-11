@@ -21,7 +21,7 @@
 #define ASECS 0x07
 #define TEMPMSB 0x11
 #define TEMPLSB 0x12
-#define CR 0x0D
+#define CR 0x0E
 #define GPUREAD	0x2000B880
 #define GPUPOLL	0x2000B890
 #define GPUSENDER	0x2000B894
@@ -430,43 +430,50 @@ void TIME(void)
 	//uart_puts("\x1B" "[u");	//Return Cursor to saved location
 	uart_puts("\x1B" "[2J" "\x1B" "[2;1H");	//Clear Screen, Go to row 2, col 1
 	
+	bcm2835_i2c_begin();
+	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+	bcm2835_i2c_setSlaveAddress(0x68);
+	bcm2835_i2c_read(CR,*buffer);
+	
+	for (int i=0;i<8;i++) {
+		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
+	}
+	
+	*buffer[0] = (*buffer[0] & 0b11111011);	
+	bcm2835_i2c_write(CR,*buffer);
+	for (int i=0;i<8;i++) {
+		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
+	}
+	
+	*buffer[0] = (*buffer[0] & 0b11111011);
+	bcm2835_i2c_write(CR,*buffer);		//CR=0xD not sure, Datasheet says 0xE //bcm2835_i2c_write(0xE,*buffer);
+	for (int i=0;i<8;i++) {
+		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
+	}
+	bcm2835_delayMicroseconds(100);
+	bcm2835_i2c_read(CR,*buffer);
+	for (int i=0;i<8;i++) {
+		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
+	}
+	bcm2835_delayMicroseconds(500);
+	bcm2835_i2c_read(CR,*buffer);
+	for (int i=0;i<8;i++) {
+		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
+	}
+	
+	bcm2835_i2c_end();
+	
 	//Activate Interrupts
-	bcm2835_gpio_fsel(RPI_GPIO_P1_23, BCM2835_GPIO_FSEL_INPT);
-	bcm2835_gpio_fsel(RPI_GPIO_P1_24, BCM2835_GPIO_FSEL_INPT);
-	bcm2835_gpio_set_pud(RPI_GPIO_P1_23, BCM2835_GPIO_PUD_UP);
-	bcm2835_gpio_set_pud(RPI_GPIO_P1_24, BCM2835_GPIO_PUD_DOWN);
-	bcm2835_gpio_fen(RPI_GPIO_P1_23);
-	bcm2835_gpio_ren(RPI_GPIO_P1_24);
+	bcm2835_gpio_fsel(RPI_GPIO_P1_16, BCM2835_GPIO_FSEL_INPT);
+	bcm2835_gpio_fsel(RPI_GPIO_P1_18, BCM2835_GPIO_FSEL_INPT);
+	bcm2835_gpio_set_pud(RPI_GPIO_P1_16, BCM2835_GPIO_PUD_UP);
+	bcm2835_gpio_set_pud(RPI_GPIO_P1_18, BCM2835_GPIO_PUD_OFF);
+	bcm2835_gpio_fen(RPI_GPIO_P1_16);
+	bcm2835_gpio_ren(RPI_GPIO_P1_18);
 	enable_irq(49);
 	enable_irq(50);
 	enable_irq(51);
 	enable_irq(52);
-	
-	bcm2835_i2c_begin();
-	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
-	bcm2835_i2c_setSlaveAddress(0x68);
-	*buffer[0] = 0b11111011;
-	bcm2835_i2c_write(CR,*buffer);		//CR=0xD not sure, Datasheet says 0xE //bcm2835_i2c_write(0xE,*buffer);
-	bcm2835_i2c_end();
-	
-	//TEST
-	while (rxbuff_b == rxbuff_e) {							//Wait until buffer is nonempty
-		uart_putc('\n');
-		uart_putc('\r');
-		uart_putc(bcm2835_gpio_lev(RPI_GPIO_P1_23) + 48);
-		uart_putc('\t');
-		uart_putc(bcm2835_gpio_lev(RPI_GPIO_P1_24) + 48);
-		
-		if (bcm2835_gpio_eds(RPI_GPIO_P1_23)) {		//Reset Clock
-			uart_putc('R');
-			bcm2835_gpio_set_eds(RPI_GPIO_P1_23);
-		}
-		if (bcm2835_gpio_eds(RPI_GPIO_P1_24)) {		//Time Update
-			uart_putc('T');
-			bcm2835_gpio_set_eds(RPI_GPIO_P1_24);
-		}
-	}
-	//TESTEND
 	
 	uart_puts("\r\nType TIME (S)et or (D)isplay: ");
 	uint8_t c = '\0';
@@ -948,15 +955,14 @@ void kernel_main()
 void irq_handler(void)
 {
 	
-	if (bcm2835_gpio_eds(RPI_GPIO_P1_23)) {		//Reset Clock
+	if (bcm2835_gpio_eds(RPI_GPIO_P1_16)) {		//Reset Clock
 		uart_putc('R');
-		bcm2835_gpio_set_eds(RPI_GPIO_P1_23);
+		bcm2835_gpio_set_eds(RPI_GPIO_P1_16);
 	}
-	if (bcm2835_gpio_eds(RPI_GPIO_P1_24)) {		//Time Update
+	if (bcm2835_gpio_eds(RPI_GPIO_P1_18)) {		//Time Update
 		uart_putc('T');
-		bcm2835_gpio_set_eds(RPI_GPIO_P1_24);
+		bcm2835_gpio_set_eds(RPI_GPIO_P1_18);
 	}
-	uart_putc('B');
 	if (txbuff_b != txbuff_e) { 
 		if (uart_buffchk('t') == 0) {
 			for (int i=0;i<8;i++) {
