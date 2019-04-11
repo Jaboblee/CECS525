@@ -151,6 +151,15 @@ void bcm2835_gpio_write(uint8_t pin, uint8_t on)
 		bcm2835_gpio_clr(pin);
 }
 
+// Read input pin
+uint8_t bcm2835_gpio_lev(uint8_t pin)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPLEV0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    uint32_t value = bcm2835_peri_read(paddr);
+    return (value & (1 << shift)) ? HIGH : LOW;
+}
+
 // See if an event detection bit is set
 uint8_t bcm2835_gpio_eds(uint8_t pin)
 {
@@ -197,6 +206,49 @@ void bcm2835_gpio_clr_fen(uint8_t pin)
     uint8_t shift = pin % 32;
     uint32_t value = 1 << shift;
     bcm2835_peri_set_bits(paddr, 0, value);
+}
+
+// Set pullup/down
+void bcm2835_gpio_pud(uint8_t pud)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPPUD/4;
+    bcm2835_peri_write(paddr, pud);
+}
+
+// Pullup/down clock
+// Clocks the value of pud into the GPIO pin
+void bcm2835_gpio_pudclk(uint8_t pin, uint8_t on)
+{
+    volatile uint32_t* paddr = bcm2835_gpio + BCM2835_GPPUDCLK0/4 + pin/32;
+    uint8_t shift = pin % 32;
+    bcm2835_peri_write(paddr, (on ? 1 : 0) << shift);
+}
+
+// Set the pullup/down resistor for a pin
+//
+// The GPIO Pull-up/down Clock Registers control the actuation of internal pull-downs on
+// the respective GPIO pins. These registers must be used in conjunction with the GPPUD
+// register to effect GPIO Pull-up/down changes. The following sequence of events is
+// required:
+// 1. Write to GPPUD to set the required control signal (i.e. Pull-up or Pull-Down or neither
+// to remove the current Pull-up/down)
+// 2. Wait 150 cycles ? this provides the required set-up time for the control signal
+// 3. Write to GPPUDCLK0/1 to clock the control signal into the GPIO pads you wish to
+// modify ? NOTE only the pads which receive a clock will be modified, all others will
+// retain their previous state.
+// 4. Wait 150 cycles ? this provides the required hold time for the control signal
+// 5. Write to GPPUD to remove the control signal
+// 6. Write to GPPUDCLK0/1 to remove the clock
+//
+// RPi has P1-03 and P1-05 with 1k8 pullup resistor
+void bcm2835_gpio_set_pud(uint8_t pin, uint8_t pud)
+{
+    bcm2835_gpio_pud(pud);
+    delayMicroseconds(10);
+    bcm2835_gpio_pudclk(pin, 1);
+    delayMicroseconds(10);
+    bcm2835_gpio_pud(BCM2835_GPIO_PUD_OFF);
+    bcm2835_gpio_pudclk(pin, 0);
 }
 
 void bcm2835_spi_chipSelect(uint8_t cs)

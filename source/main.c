@@ -86,7 +86,7 @@ void toString(int num, char* numArray);					//Converts signed int num into ascii
 int log_10(int num);							//Returns the number of digits in an integer
 int stringToint(char *string);						//Returns signed int as converted from ascii string
 int calc(void);								//Enters calculator submenu
-void gettime_s(char *s);
+int gettime_s(char *s);
 
 //Serial buffers
 #define rxbuffsize 256
@@ -385,7 +385,7 @@ void TIME(void)
 	
 	//Activate Interrupts
 	bcm2835_gpio_fsel(RPI_GPIO_P1_24, BCM2835_GPIO_FSEL_INPT);
-	bcm2835_gpio_fsel(RPI_GPIO_P1_23, BCM2835_GPIO_FSEL_INPT)
+	bcm2835_gpio_fsel(RPI_GPIO_P1_23, BCM2835_GPIO_FSEL_INPT);
 	bcm2835_gpio_ren(RPI_GPIO_P1_24);
 	bcm2835_gpio_fen(RPI_GPIO_P1_23);
 	enable_irq(49);
@@ -404,7 +404,8 @@ void TIME(void)
 	//TEST
 	while (rxbuff_b == rxbuff_e) {							//Wait until buffer is nonempty
 		uart_putc('\n');
-		uart_putc(bcm2835_gpio_lev(RPI_GPIO_P1_23) + 48)
+		uart_putc('\r');
+		uart_putc(bcm2835_gpio_lev(RPI_GPIO_P1_23) + 48);
 		uart_putc('\t');
 		uart_putc(bcm2835_gpio_lev(RPI_GPIO_P1_24) + 48);
 		
