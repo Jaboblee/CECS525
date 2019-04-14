@@ -89,6 +89,8 @@ int log_10(int num);							//Returns the number of digits in an integer
 int stringToint(char *string);						//Returns signed int as converted from ascii string
 int calc(void);								//Enters calculator submenu
 int gettime_s(char *s);
+int getdate_s(char *s);
+void time_reset(void);
 
 //Serial buffers
 #define rxbuffsize 256
@@ -371,6 +373,48 @@ void temp_update() {
 	}
 }
 	
+int getdate_s(char *s) {
+	char ones,tens;
+	int i = 0;
+	
+	bcm2835_i2c_begin();
+	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+	bcm2835_i2c_setSlaveAddress(0x68);
+	bcm2835_i2c_read(MONTH,*buffer);
+	if (*buffer[0] & 0x80) {
+		date_century++;
+		*buffer[0] = *buffer[0] & 0x7F;
+		bcm2835_i2c_write(MONTH,*buffer);
+	}
+	ones = *buffer[0] & 0x0F;
+	tens = (*buffer[0] >> 4);
+	s[i++] = tens + 48;	//uart_putc(tens+48);
+	s[i++] = ones + 48;	//uart_putc(ones+48);
+		
+	bcm2835_i2c_read(DOM,*buffer);
+	ones = *buffer[0] & 0x0F;
+	tens = (*buffer[0] >> 4);
+	s[i++] = '/';	//uart_putc('/');
+	s[i++] = tens + 48;	//uart_putc(tens+48);
+	s[i++] = ones + 48;	//uart_putc(ones+48);
+	
+	tens = date_century / 10;
+	ones = date_century - (tens * 10);
+	s[i++] = '/';	//uart_putc('/');
+	s[i++] = tens + 48;	//uart_putc(tens+48);
+	s[i++] = ones + 48;	//uart_putc(ones+48);
+	
+	bcm2835_i2c_read(YEAR,*buffer);
+	ones = *buffer[0] & 0x0F;
+	tens = (*buffer[0] >> 4);
+	bcm2835_i2c_end();
+	
+	s[i++] = tens + 48;	//uart_putc(tens+48);
+	s[i++] = ones + 48;	//uart_putc(ones+48);
+	s[i] = '\0';
+	
+	return i;
+}
 
 int gettime_s(char *s) {
 	char ones,tens;
@@ -415,6 +459,7 @@ int gettime_s(char *s) {
 		}
 		s[i++] = 'M';
 	}
+	s[i] = '\0';
 	
 	return i;
 }
@@ -607,7 +652,27 @@ void TIME(void)
 	}
 }
 
+void time_reset(void) {
+	bcm2835_i2c_begin();
+	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+	bcm2835_i2c_setSlaveAddress(0x68);
 
+	*buffer[0] = 0x00;
+	bcm2835_i2c_write(SECS,*buffer);
+	*buffer[0] = 0x00;
+	bcm2835_i2c_write(MINS,*buffer);
+	*buffer[0] = 0b00010010;
+	bcm2835_i2c_write(HRS,*buffer);
+	*buffer[0] = 0x01;			
+	bcm2835_i2c_write(DOM,*buffer);		
+	*buffer[0] = 0x01;			
+	bcm2835_i2c_write(MONTH,*buffer);
+	date_century = 20;
+	*buffer[0] = 0x18;
+	bcm2835_i2c_write(YEAR,*buffer);
+
+	bcm2835_i2c_end();
+}
 
 void ALARM(void)
 {
@@ -956,12 +1021,35 @@ void irq_handler(void)
 {
 	
 	if (bcm2835_gpio_eds(RPI_GPIO_P1_16)) {		//Reset Clock
-		uart_putc('R');
 		bcm2835_gpio_set_eds(RPI_GPIO_P1_16);
+		disable_irq(49);
+		disable_irq(50);
+		disable_irq(51);
+		disable_irq(52);
+		time_reset();
+		enable_irq(49);
+		enable_irq(50);
+		enable_irq(51);
+		enable_irq(52);
 	}
 	if (bcm2835_gpio_eds(RPI_GPIO_P1_18)) {		//Time Update
-		uart_putc('T');
 		bcm2835_gpio_set_eds(RPI_GPIO_P1_18);
+		disable_irq(49);
+		disable_irq(50);
+		disable_irq(51);
+		disable_irq(52);
+		datetime[20];
+		uart_puts("\x1B" "[s" "\x1B" "[H" "\x1B" "[2K");
+		gettime_s(datetime);
+		uart_putString(datetime,20);
+		uart_putc(' ');
+		getdate_s(datetime);
+		uart_putString(datetime,20);
+		uart_puts("\x1B" "[u");	//Return Cursor to saved location
+		enable_irq(49);
+		enable_irq(50);
+		enable_irq(51);
+		enable_irq(52);
 	}
 	if (txbuff_b != txbuff_e) { 
 		if (uart_buffchk('t') == 0) {
