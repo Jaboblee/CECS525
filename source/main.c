@@ -1038,7 +1038,7 @@ void irq_handler(void)
 		disable_irq(50);
 		disable_irq(51);
 		disable_irq(52);
-		datetime[20];
+		char datetime[20];
 		uart_puts("\x1B" "[s" "\x1B" "[H" "\x1B" "[2K");
 		gettime_s(datetime);
 		uart_putString(datetime,20);
