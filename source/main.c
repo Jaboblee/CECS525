@@ -35,7 +35,7 @@ const char MS1[] = "\r\n\nCECS-525 RPI Tiny OS";
 const char MS2[] = "\r\nby Eugene Rockey Copyright 2013 All Rights Reserved";
 const char MS3[] = "\r\nReady: ";
 const char MS4[] = "\r\nInvalid Command Try Again...";
-const char MS5[] = "\r\n(A)DC,(C)ancom,(D)ate,(H)elp,a(L)arm,(R)eset,(S)FT,(T)ime,(V)FP11,(B)Print Long String,(G)Calculator";
+const char MS5[] = "\r\n(A)DC,(C)ancom,(H)elp,a(L)arm,(R)eset,(S)FT,(T)ime,(V)FP11,(B)Print Long String,(G)Calculator";
 const char GPUDATAERROR[] = "\r\nSystem Error: Invalid GPU Data";
 const char LOGONNAME[] = "eugene    ";
 const char PASSWORD[] = "cecs525   ";
@@ -84,13 +84,14 @@ void buff_print(void);							//Transmits entire rx buffer one character at a tim
 char buff_readc(void);							//Returns and removes oldest character from rx buffer
 void buff_readline(char *s, int n);					//Reads n characters from rx buffer into *s or until '\n' 
 void tx_string(void);							//Tranmits long string from memory							
-void toString(int num, char* numArray);					//Converts signed int num into ascii characters in *numArray
+int toString(int num, char* numArray);					//Converts signed int num into ascii characters in *numArray
 int log_10(int num);							//Returns the number of digits in an integer
 int stringToint(char *string);						//Returns signed int as converted from ascii string
 int calc(void);								//Enters calculator submenu
 int gettime_s(char *s);
 int getdate_s(char *s);
 void time_reset(void);
+int temp_update(char *temp_string);
 
 //Serial buffers
 #define rxbuffsize 256
@@ -104,7 +105,6 @@ volatile unsigned int txbuff_b;
 volatile unsigned int txbuff_e;
 
 //Date Variables
-uint8_t date_hold;							//for holding single digit
 uint8_t date_century=0;						//0-256 
 uint8_t date_year;  						//0-99
 uint8_t date_month;							//1-12
@@ -117,10 +117,7 @@ uint8_t time_minute;							//0-59
 uint8_t time_second;							//0-59
 	
 //Temperature Variables
-uint8_t temp_units						//0 for Celsius, 1 for Fahrenheit
-char temp_string[8];						//whole number string
-char temp_decimal[3];						//decimal string
-
+uint8_t temp_units;						//0 for Celsius, 1 for Fahrenheit
 /***************************************************************************/
 
 extern int invar;               //assembly variables
@@ -331,7 +328,7 @@ void DATE(void)
 	}
 }
 
-void temp_update() {
+int temp_update(char *temp_string) {
 	
 	int temp_int;					//For use within tostring, which takes an int as an input
 	uint8_t temp_frac;				//Used for fractional input
@@ -347,30 +344,30 @@ void temp_update() {
 		temp_int = (temp_int & 0xFFFFFF7F);
 	}
 	
-	toString(temp_int, temp_string);
-	bcm2835_i2c_read(TEMPMSB, *buffer);
+	int n = toString(temp_int, temp_string);
+	
+	bcm2835_i2c_read(TEMPLSB, *buffer);
 	temp_frac = ((*buffer[0] & 0xC0) >> 6);		//00 for 0, 01 for .25, 10 for .5, 11 for .75
 	
 	if (temp_frac != 0) {
 		if (temp_frac == 1) {
-			temp_decimal[0] = '.';
-			temp_decimal[1] = '2';
-			temp_decimal[2] = '5';
+			temp_string[n++] = '.';
+			temp_string[n++] = '2';
+			temp_string[n++] = '5';
 		}
 		else if (temp_frac == 2) {
-			temp_decimal[0] = '.';
-			temp_decimal[1] = '5';
-			temp_decimal[2] = '\0';
+			temp_string[n++] = '.';
+			temp_string[n++] = '5';
 		}
 		else if (temp_frac == 3) {
-			temp_decimal[0] = '.';
-			temp_decimal[1] = '7';
-			temp_decimal[2] = '5';
-		}	
+			temp_string[n++] = '.';
+			temp_string[n++] = '7';
+			temp_string[n++] = '5';
+		}
+		temp_string[n] = '\0';
 	}
-	else {
-		temp_decimal[0] = '\0';
-	}
+	
+	return n;
 }
 	
 int getdate_s(char *s) {
@@ -470,42 +467,19 @@ void TIME(void)
 	char tens = -1;
 	int8_t ampm = -1;
 	char c2 = '\0';
+	char hrs,mins,secs,yrs,mth,dom;
 	
-	//uart_puts("\x1B" "[s" "\x1B" "[H" "\x1B" "[2K");	//Save Cursor, Go Home, Erase Line
-	//uart_puts("\x1B" "[u");	//Return Cursor to saved location
-	uart_puts("\x1B" "[2J" "\x1B" "[2;1H");	//Clear Screen, Go to row 2, col 1
-	
+	disable_irq(49);
 	bcm2835_i2c_begin();
 	bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
 	bcm2835_i2c_setSlaveAddress(0x68);
-	bcm2835_i2c_read(CR,*buffer);
 	
-	for (int i=0;i<8;i++) {
-		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
-	}
-	
-	*buffer[0] = (*buffer[0] & 0b11111011);	
-	bcm2835_i2c_write(CR,*buffer);
-	for (int i=0;i<8;i++) {
-		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
-	}
-	
-	*buffer[0] = (*buffer[0] & 0b11111011);
-	bcm2835_i2c_write(CR,*buffer);		//CR=0xD not sure, Datasheet says 0xE //bcm2835_i2c_write(0xE,*buffer);
-	for (int i=0;i<8;i++) {
-		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
-	}
-	bcm2835_delayMicroseconds(100);
-	bcm2835_i2c_read(CR,*buffer);
-	for (int i=0;i<8;i++) {
-		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
-	}
 	bcm2835_delayMicroseconds(500);
 	bcm2835_i2c_read(CR,*buffer);
-	for (int i=0;i<8;i++) {
-		uart_putc(!!((*buffer[0] << i) & 0x80) + 48);
-	}
-	
+	bcm2835_delayMicroseconds(500);
+	*buffer[0] = (*buffer[0] & 0b11111011);	
+	bcm2835_i2c_write(CR,*buffer);
+	bcm2835_delayMicroseconds(500);
 	bcm2835_i2c_end();
 	
 	//Activate Interrupts
@@ -516,21 +490,16 @@ void TIME(void)
 	bcm2835_gpio_fen(RPI_GPIO_P1_16);
 	bcm2835_gpio_ren(RPI_GPIO_P1_18);
 	enable_irq(49);
-	enable_irq(50);
-	enable_irq(51);
-	enable_irq(52);
 	
-	uart_puts("\r\nType TIME (S)et or (D)isplay: ");
+	uart_puts("\x1B" "[2J" "\x1B" "[2;1H");	//Clear Screen, Go to row 2, col 1
+	uart_puts("Set (T)IME, (D)ate, or (e)xit: ");
 	uint8_t c = '\0';
 	while (c == '\0') 
 	{
 		c = buff_readc();
 	}
 	switch (c) {
-		case 'S' | 's':
-			bcm2835_i2c_begin();
-			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
-			bcm2835_i2c_setSlaveAddress(0x68);
+		case 'T': case 't':
 			uart_puts("\r\nSet AM(0), PM(1), or (2)4Hour ");
 			ampm = buff_readc() - 48;
 			uart_puts("\r\nType Hours (two digits 00-");
@@ -547,7 +516,7 @@ void TIME(void)
 			ones = (c2-48) | 0xF0;
 			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 23 || (BCDtoUint8(tens & ones) > 12 && ampm != 2)) 
 			{
-				*buffer[0] = 0x00;
+				hrs = 0x00;
 				uart_puts("\r\nInvalid Hours Value!");
 				break;
 			}
@@ -559,9 +528,8 @@ void TIME(void)
 					ampm = 0;
 				}
 				
-				*buffer[0] = ampm | (tens & ones);
+				hrs = ampm | (tens & ones);
 			}			
-			bcm2835_i2c_write(HRS,*buffer);
 			
 			uart_puts("\r\nType Minutes (two digits 00-59): ");
 			c2 = buff_readc();
@@ -572,15 +540,15 @@ void TIME(void)
 			ones = (c2-48) | 0xF0;
 			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 59) 
 			{
-				*buffer[0] = 0x00;
+				mins = 0x00;
 				uart_puts("\r\nInvalid Minutes Value!");
 				break;
 			}
 			else
 			{
-				*buffer[0] = tens & ones;
+				mins = tens & ones;
 			}			
-			bcm2835_i2c_write(MINS,*buffer);			
+						
 			uart_puts("\r\nType Seconds (two digits 00-59): ");
 			c2 = buff_readc();
 			uart_putc(c2);
@@ -590,61 +558,118 @@ void TIME(void)
 			ones = (c2-48) | 0xF0;
 			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 59) 
 			{
-				*buffer[0] = 0x00;
+				secs = 0x00;
 				uart_puts("\r\nInvalid Seconds Value!");
 				break;
 			}
 			else
 			{
-				*buffer[0] = tens & ones;
-			}			
-			bcm2835_i2c_write(SECS,*buffer);			
-			uart_puts("\r\nTime is now set.");
-			bcm2835_i2c_end();
-			break;
-			
-		case 'D' | 'd':
-			
-			uart_puts("\x1B" "[s" "\x1B" "[H" "\x1B" "[2K");	//Save Cursor, Go Home, Erase Line
-		
+				secs = tens & ones;
+			}
+			disable_irq(49);
 			bcm2835_i2c_begin();
 			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
 			bcm2835_i2c_setSlaveAddress(0x68);
-			bcm2835_i2c_read(HRS,*buffer);
-			ones = *buffer[0] & 0x0F;
-			if (*buffer[0] & 0b01000000) {
-				tens = (*buffer[0] >> 4) & 0b1;
-				ampm = (*buffer[0] >> 5) & 0b1;
-			} else {
-				tens = (*buffer[0] >> 4) & 0b11;
+			*buffer[0] = hrs;
+			bcm2835_i2c_write(HRS,*buffer);
+			bcm2835_delayMicroseconds(500);
+			*buffer[0] = mins;
+			bcm2835_i2c_write(MINS,*buffer);
+			bcm2835_delayMicroseconds(500);
+			*buffer[0] = secs;
+			bcm2835_i2c_write(SECS,*buffer);
+			bcm2835_delayMicroseconds(500);			
+			uart_puts("\r\nTime is now set.");
+			bcm2835_i2c_end();
+			enable_irq(49);
+			break;
+			
+		case 'D': case 'd':
+			uart_puts("\r\nSet Date:");
+			uart_puts("\r\nType Year (Four Digits 0000-9999): ");
+			
+			c2 = buff_readc();
+			uart_putc(c2);
+			date_century = (c2-48);			//input date_millenium
+			date_century = date_century*10;
+			c2 = buff_readc();
+			uart_putc(c2);	
+			date_century += (c2-48);		//input date_century
+			c2 = buff_readc();
+			uart_putc(c2);
+			tens = (c2-48);			//holding the tens spot for date_year
+			c2 = buff_readc();
+			uart_putc(c2);
+			ones = (c2-48);			//input ones spot for date_year
+			date_year = ones + (tens*10); 	//combining date_hold and date_year to make date_year 0-99
+			
+			if (ones > 9 || tens > 9) 
+			{
+				yrs = 0x00;
+				uart_puts("\r\nInvalid Year Value!");
+				break;
 			}
-			uart_putc(tens+48);
-			uart_putc(ones+48);
-			bcm2835_i2c_read(MINS,*buffer);
-			ones = *buffer[0] & 0x0F;
-			tens = (*buffer[0] >> 4);
-			uart_putc(':');
-			uart_putc(tens+48);
-			uart_putc(ones+48);
-			bcm2835_i2c_read(SECS,*buffer);
-			bcm2835_i2c_end(); 
-			ones = *buffer[0] & 0x0F;
-			tens = (*buffer[0] >> 4);
-			uart_putc(':');
-			uart_putc(tens+48);
-			uart_putc(ones+48);	  
-			if (ampm != -1) {
-				uart_putc(' ');
-				if (ampm == 0) {
-					uart_puts("AM");
-				} else {
-					uart_puts("PM");	
-				}
+			else
+			{
+				yrs = (tens << 4) | ones;
 			}
 			
-			uart_puts("\x1B" "[u");	//Return Cursor to saved location
+			uart_puts("\r\nType Month (two digits 00-12): ");
+			c2 = buff_readc();
+			uart_putc(c2);
+			tens = ((c2-48)<<4) | 0x0F;			//holding the tens spot for date_month
+			c2 = buff_readc();
+			uart_putc(c2);
+			ones = (c2-48) | 0xF0;			//input ones spot for date_month
 			
+			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 12) 
+			{
+				mth = 0x00;
+				uart_puts("\r\nInvalid Month Value!");
+				break;
+			}
+			else
+			{
+				mth = tens & ones;
+			}
+						
+			uart_puts("\r\nType Day (two digits 00-31): ");
+			c2 = buff_readc();
+			uart_putc(c2);
+			tens = ((c2-48) << 4) | 0x0F;
+			c2 = buff_readc();
+			uart_putc(c2);
+			ones = (c2-48) | 0xF0;
+			if (BCDtoUint8(tens & ones) < 0 || BCDtoUint8(tens & ones) > 59) 
+			{
+				dom = 0x00;
+				uart_puts("\r\nInvalid Day Value!");
+				break;
+			}
+			else
+			{
+				dom = tens & ones;
+			}
+			disable_irq(49);
+			bcm2835_i2c_begin();
+			bcm2835_i2c_setClockDivider(BCM2835_I2C_CLOCK_DIVIDER_2500);
+			bcm2835_i2c_setSlaveAddress(0x68);
+			*buffer[0] = yrs;
+			bcm2835_i2c_write(YEAR,*buffer);
+			bcm2835_delayMicroseconds(500);
+			*buffer[0] = mth;
+			bcm2835_i2c_write(MONTH,*buffer);
+			bcm2835_delayMicroseconds(500);
+			*buffer[0] = dom;
+			bcm2835_i2c_write(DOM,*buffer);
+			bcm2835_delayMicroseconds(500);	
+			uart_puts("\r\nDate is now set.");
+			bcm2835_i2c_end();
+			enable_irq(49);
 			break;	
+		case 'E': case 'e':
+			disable_irq(49);
+			break;
 		default:
 			uart_puts(MS4);
 			TIME();
@@ -659,17 +684,23 @@ void time_reset(void) {
 
 	*buffer[0] = 0x00;
 	bcm2835_i2c_write(SECS,*buffer);
+	bcm2835_delayMicroseconds(500);
 	*buffer[0] = 0x00;
 	bcm2835_i2c_write(MINS,*buffer);
+	bcm2835_delayMicroseconds(500);
 	*buffer[0] = 0b00010010;
 	bcm2835_i2c_write(HRS,*buffer);
+	bcm2835_delayMicroseconds(500);
 	*buffer[0] = 0x01;			
-	bcm2835_i2c_write(DOM,*buffer);		
+	bcm2835_i2c_write(DOM,*buffer);
+	bcm2835_delayMicroseconds(500);		
 	*buffer[0] = 0x01;			
 	bcm2835_i2c_write(MONTH,*buffer);
+	bcm2835_delayMicroseconds(500);
 	date_century = 20;
 	*buffer[0] = 0x18;
 	bcm2835_i2c_write(YEAR,*buffer);
+	bcm2835_delayMicroseconds(500);
 
 	bcm2835_i2c_end();
 }
@@ -988,6 +1019,7 @@ void kernel_main()
 	enable_irq(57);	//enable_irq_57();
 	enable_arm_irq();
 //	if (logon() == 0) while (1) {}
+	time_reset();
 	banner();
 //	HELP();
 	while (1) {command();}
@@ -1023,21 +1055,12 @@ void irq_handler(void)
 	if (bcm2835_gpio_eds(RPI_GPIO_P1_16)) {		//Reset Clock
 		bcm2835_gpio_set_eds(RPI_GPIO_P1_16);
 		disable_irq(49);
-		disable_irq(50);
-		disable_irq(51);
-		disable_irq(52);
 		time_reset();
 		enable_irq(49);
-		enable_irq(50);
-		enable_irq(51);
-		enable_irq(52);
 	}
 	if (bcm2835_gpio_eds(RPI_GPIO_P1_18)) {		//Time Update
 		bcm2835_gpio_set_eds(RPI_GPIO_P1_18);
 		disable_irq(49);
-		disable_irq(50);
-		disable_irq(51);
-		disable_irq(52);
 		char datetime[20];
 		uart_puts("\x1B" "[s" "\x1B" "[H" "\x1B" "[2K");
 		gettime_s(datetime);
@@ -1045,11 +1068,14 @@ void irq_handler(void)
 		uart_putc(' ');
 		getdate_s(datetime);
 		uart_putString(datetime,20);
+		uart_putc(' ');
+		temp_update(datetime);
+		uart_putString(datetime,20);
+		uart_putc(0xC2);
+		uart_putc(0xB0);
+		uart_putc('C');
 		uart_puts("\x1B" "[u");	//Return Cursor to saved location
 		enable_irq(49);
-		enable_irq(50);
-		enable_irq(51);
-		enable_irq(52);
 	}
 	if (txbuff_b != txbuff_e) { 
 		if (uart_buffchk('t') == 0) {
@@ -1125,7 +1151,7 @@ char buff_readc(void) {
 	return c;	
 }
 
-void toString(int num, char* numArray) {
+int toString(int num, char* numArray) {
 	int neg = 0;
 	if (num < 0) {
 		num = num * (-1);
@@ -1141,6 +1167,8 @@ void toString(int num, char* numArray) {
 	
 	numArray[n+1]='\0';
 	if (neg == 1) {numArray[0] = '-';}
+	
+	return n+1;
 }
 
 int log_10(int num) {
