@@ -15,7 +15,9 @@ teststring = 'abcdefghijklmnopqrstuvwxyz'
 tx = 11
 rx = 13
 
+inputbuff = []
 inputbyte = ''
+t = 0
 rxing = 0
 last_tx = 0
 bits = 0
@@ -53,69 +55,45 @@ def getAscii(byte):
 			print('character = ', chr(ascii))
 				     
 
-def timecheck(channel):
-	time.sleep(.01)
+def rising(channel):
 	mode = gpio.input(channel)
 	global last_tx
 	global rxing
 	global bits
 	global inputbyte
 	global byte_rxd
+	global p
+	global t
 	prev = last_tx
 	now = time.time()
 	last_tx = now
-	if (mode == 1):
-		print('Rising')
-		if (rxing == 0):
-			rxing = 1
-			return
-		else:
-			if (bits == 9):
-				bits = 0
-				rxing = 0
-				byte_rxd = 1
-				checkParity(inputbyte)
-				inputbyte = ''
-				return
-			else:
-				bits_since=periods(now,prev)
-				if bits + bits_since > 8:
-					for i in range(0, 8 - bits):
-						inputbyte += str(0)
-					bits = 0
-					rxing = 1
-					byte_rxd = 1
-					checkParity(inputbyte)
-					inputbyte = ''
-					return
-				for i in range(bits,bits+bits_since):
-					inputbyte += str(0)
-				bits += bits_since
-				
+	print('Rising')
+	if (rxing == 0):
+		rxing = 1
+		t = threading.Timer(p,uart_read())
+		t.start()
+
+def uart_read():
+	global p
+	global bits
+	global rxing
+	global inputbyte
+	global inputbuff
+	global rx
+	print('b'+inputbyte)
+	if (bits < 10):
+		bits += 1
+		inputbyte += str(gpio.input(rx))
+
+		time.sleep(p)#threading.Timer(p,uart_read()).start
+		uart_read()
 	else:
-		print('Falling')
-		if (bits == 9):
-			bits = 0
-			rxing = 0
-			byte_rxd = 1
-			checkParity(inputbyte)
-			inputbyte = ''
-			return
-		else:
-			bits_since=periods(now,prev)
-			if bits + bits_since > 8:
-				for i in range(0, 8 - bits):
-					inputbyte += str(1)
-				bits = 0
-				rxing = 1
-				byte_rxd = 1
-				checkParity(inputbyte)
-				inputbyte = ''
-				return
-			for i in range(bits,bits+bits_since):
-				inputbyte += str(1)
-			bits += bits_since
-	#time
+		bits = 0
+		print(inputbyte)
+		inputbuff.append(inputbyte)
+		rxing = 0
+		
+		
 
 def lase_c(char, channel):
 	char = bin(int(binascii.hexlify(char),16))[2:]
@@ -174,17 +152,46 @@ def setup():
 	gpio.setmode(gpio.BOARD)
 	gpio.setup(tx, gpio.OUT)
 	gpio.setup(rx, gpio.IN)
-	gpio.add_event_detect(rx, gpio.BOTH, callback=timecheck, bouncetime=30)
+	gpio.add_event_detect(rx, gpio.RISING, callback=rising, bouncetime=10)
 	gpio.output(tx,gpio.HIGH)
 
 #serIn = serial.Serial('/dev/ttyAMA0', baudrate=300, timeout=1)
 
+setup()
+
 try:
-	setup()
-	time.sleep(2)
-	lase_s('abc',tx)
-	print(readbyte())
-	print()
+	time.sleep(5)
+
+	gpio.output(11,gpio.LOW)
+	time.sleep(p)
+	gpio.output(11,gpio.LOW)
+	time.sleep(p)
+	gpio.output(11,gpio.HIGH)
+	time.sleep(p)
+	gpio.output(11,gpio.HIGH)
+	time.sleep(p)
+	gpio.output(11,gpio.HIGH)
+	time.sleep(p)
+	gpio.output(11,gpio.HIGH)
+	time.sleep(p)
+	gpio.output(11,gpio.LOW)
+	time.sleep(p)
+	gpio.output(11,gpio.LOW)
+	time.sleep(p)
+	gpio.output(11,gpio.LOW)
+	time.sleep(p)
+	gpio.output(11,gpio.HIGH)
+	time.sleep(p)
+	gpio.output(11,gpio.HIGH)
+	time.sleep(p)
+
+	while (len(inputbuff) == 0):
+		pass
+
+	print(inputbuff[0])
+	
+	gpio.output(11,gpio.HIGH)
+	gpio.cleanup()
 #try:
 #	while (1):
 #		print(gpio.input(rx))
